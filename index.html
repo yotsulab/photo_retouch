@@ -1,0 +1,268 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
+<title>ポートレート レタッチ</title>
+<style>
+:root{--bg:#f6f4f1;--fg:#222;--mut:#777;--card:#fff;--ac:#d9627a;--bd:#e3dfda;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#1b1a19;--fg:#eee;--mut:#999;--card:#272524;--ac:#ef8aa0;--bd:#3a3736}}
+:root[data-theme="dark"]{--bg:#1b1a19;--fg:#eee;--mut:#999;--card:#272524;--ac:#ef8aa0;--bd:#3a3736}
+html{touch-action:pan-x pan-y;scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 -apple-system,"Hiragino Sans","Noto Sans JP",sans-serif}
+.app{max-width:1100px;margin:0 auto;padding:10px}
+@media(min-width:860px){.app{display:grid;grid-template-columns:1fr 340px;gap:16px;align-items:start}#wrap.loaded{height:78vh}}
+#vp{position:relative}
+#wrap{position:relative;overflow:auto;background:var(--card);border:1px solid var(--bd);border-radius:12px;min-height:200px;overscroll-behavior:contain}
+#wrap.loaded{height:50vh}
+#stage{position:relative;margin:0 auto}
+#cv{display:block;width:100%;height:auto;touch-action:none}
+#cur{position:absolute;border:2px solid #fff;box-shadow:0 0 0 1px #000a;border-radius:50%;pointer-events:none;display:none;transform:translate(-50%,-50%)}
+#empty{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;min-height:240px;color:var(--mut);text-align:center;padding:20px}
+#zc{position:absolute;right:8px;bottom:8px;display:none;gap:4px;align-items:center;background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:3px}
+#zc button{padding:3px 11px}#zc span{min-width:44px;text-align:center;font-size:13px;color:var(--mut)}
+#strip{display:flex;gap:6px;overflow-x:auto;margin-top:8px;padding-bottom:4px}
+.th{position:relative;flex:none;width:58px;height:58px;border-radius:8px;overflow:hidden;border:2px solid transparent;cursor:pointer}
+.th.on{border-color:var(--ac)}.th img{width:100%;height:100%;object-fit:cover;display:block}
+.th.nop::after{content:"";position:absolute;left:3px;bottom:3px;width:9px;height:9px;border-radius:50%;background:#f5a623;border:1px solid #fff}
+.th .x{position:absolute;top:0;right:0;background:#000a;color:#fff;font-size:12px;line-height:1;padding:3px 5px;border-radius:0 0 0 6px}
+.side{display:flex;flex-direction:column;gap:10px;margin-top:10px}
+@media(min-width:860px){.side{margin-top:0}}
+button,.btn{font:inherit;border:1px solid var(--bd);background:var(--card);color:var(--fg);border-radius:10px;padding:9px 12px;cursor:pointer;-webkit-user-select:none;user-select:none}
+button.pri,.btn.pri{background:var(--ac);border-color:var(--ac);color:#fff}
+button.on{border-color:var(--ac);color:var(--ac);font-weight:600}
+.row{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}.row>*{flex:1}
+.panel{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:12px;display:none}
+.panel.on{display:block}
+.sl{display:grid;grid-template-columns:90px 1fr 40px;align-items:center;gap:8px;margin:8px 0}
+.sl input{width:100%;accent-color:var(--ac)}
+.sl b{font-weight:500;text-align:right;color:var(--mut);font-variant-numeric:tabular-nums}
+.note{color:var(--mut);font-size:12.5px;margin:6px 0 0}
+#modal{position:fixed;inset:0;background:#000b;display:none;align-items:center;justify-content:center;padding:16px;z-index:9}
+.box{background:var(--card);border-radius:14px;padding:16px;width:100%;max-width:440px;max-height:80vh;overflow:auto}
+.box p{margin:0 0 8px}.rr{display:flex;align-items:center;gap:8px;margin:6px 0}.rr span{flex:1;word-break:break-all;font-size:14px}
+</style>
+</head>
+<body>
+<div class="app">
+  <div>
+    <div id="vp">
+      <div id="wrap">
+        <div id="empty"><div style="font-size:42px">🪞</div><div>写真を選んでください(複数OK)<br>写真はこの端末の中だけで処理され、送信されません</div></div>
+        <div id="stage" style="display:none"><canvas id="cv"></canvas><div id="cur"></div></div>
+      </div>
+      <div id="zc"><button id="zo">−</button><span id="zl">100%</span><button id="zi">＋</button><button id="zf">全体</button></div>
+    </div>
+    <div id="strip"></div>
+  </div>
+  <div class="side">
+    <div class="row" style="margin:0">
+      <label class="btn pri" style="text-align:center">📷 写真を選ぶ<input id="file" type="file" accept="image/*" multiple hidden></label>
+      <button id="undoB">↩︎ 戻す</button>
+      <button id="cmp">長押しで比較</button>
+    </div>
+    <div class="row" id="tabs" style="margin:0">
+      <button data-t="skin" class="on">肌</button><button data-t="color">色味</button>
+    </div>
+    <div class="sl" id="bsrow" style="display:none;margin:0"><span>ブラシの大きさ</span><input id="bs" type="range" min="4" max="80" value="10"><b id="bsv">10</b></div>
+    <div class="panel on" data-p="skin"></div>
+    <div class="panel" data-p="color"></div>
+    <button id="save" class="pri">💾 書き出す</button>
+    <p class="note" style="margin:0">なめらかさ・色味のスライダーは全ての写真に共通で、肌の範囲は写真ごとです。Cmd＋Z(Ctrl＋Z)で戻せます。拡大はE、縮小はW、Shift＋Eで100%に戻ります。</p>
+  </div>
+</div>
+<div id="modal"><div class="box"><p id="xs"></p><div id="xl"></div><div class="row"><button id="xz" class="pri">ZIPでまとめて保存</button><button id="mc">閉じる</button></div></div></div>
+
+<script>
+const MAX=2400;
+let photos=[],ph=null,W,H,orig,base,low,mask,out,raf=0,tab='skin',tool='move',zoom=1,undoS=[],drawing=false,last=null,holding=false,showMask=true,tok=0,cs=null;
+const P={smooth:40,exp:0,con:0,sh:0},committed={...P},els={};
+const $=s=>document.querySelector(s);
+const cv=$('#cv'),ctx=cv.getContext('2d'),cur=$('#cur'),wrap=$('#wrap'),stage=$('#stage');
+const push=a=>{undoS.push(a);if(undoS.length>25)undoS.shift()};
+
+/* sliders */
+const S={skin:[['smooth','なめらかさ',0,100]],color:[['exp','露出',-100,100],['con','コントラスト',-100,100],['sh','シャドウ',-100,100]]};
+for(const g in S){const p=$(`.panel[data-p=${g}]`);
+  S[g].forEach(([k,l,mn,mx])=>{const d=document.createElement('div');d.className='sl';
+    d.innerHTML=`<span>${l}</span><input type="range" min="${mn}" max="${mx}" value="${P[k]}"><b>${P[k]}</b>`;
+    const i=d.querySelector('input'),b=d.querySelector('b');els[k]=[i,b];
+    i.oninput=()=>{P[k]=+i.value;b.textContent=i.value;sched()};
+    i.onchange=()=>{if(committed[k]!==P[k]){push({t:'param',k,old:committed[k]});committed[k]=P[k]}};
+    i.ondblclick=()=>{i.value=k==='smooth'?40:0;i.oninput();i.onchange()};
+    p.appendChild(d)});}
+$('.panel[data-p=skin]').insertAdjacentHTML('beforeend',`
+<div class="row"><button data-tool="move">✋ 移動</button><button data-tool="paint">🖌 肌を塗る</button><button data-tool="erase">🧽 範囲から外す</button></div>
+<div class="row"><button id="ovl" class="on">範囲を表示</button><button id="clr">塗りをクリア</button></div>
+<div class="row"><button id="cpy">この範囲を全ての写真にコピー</button></div>
+<p class="note">「肌を塗る」で顔や腕など、なめらかにしたい所を大まかに塗ってください(赤く表示。縁は自然にぼかされます)。三脚などで構図が同じ写真は「全ての写真にコピー」で一括指定できます(他の写真の塗りは上書きされます)。サムネイルのオレンジの点は、範囲が未指定の写真です。</p>`);
+$('.panel[data-p=color]').insertAdjacentHTML('beforeend','<p class="note">スライダーをダブルタップで0に戻ります。</p>');
+
+/* tabs & tools */
+const sizes={paint:36,erase:36};
+function setTool(t){tool=t;document.querySelectorAll('[data-tool]').forEach(b=>b.classList.toggle('on',b.dataset.tool===t));
+  const br=t!=='move';$('#bsrow').style.display=br?'grid':'none';if(br){$('#bs').value=sizes[t];$('#bsv').textContent=sizes[t]}cur.style.display='none'}
+$('#bs').oninput=e=>{sizes[tool]=+e.target.value;$('#bsv').textContent=e.target.value};
+document.querySelectorAll('[data-tool]').forEach(b=>b.onclick=()=>setTool(b.dataset.tool));
+document.querySelectorAll('#tabs button').forEach(b=>b.onclick=()=>{tab=b.dataset.t;
+  document.querySelectorAll('#tabs button').forEach(x=>x.classList.toggle('on',x===b));
+  document.querySelectorAll('.panel').forEach(p=>p.classList.toggle('on',p.dataset.p===tab));
+  setTool(tab==='skin'&&(tool==='paint'||tool==='erase')?tool:'move');sched()});
+setTool('move');
+$('#ovl').onclick=e=>{showMask=!showMask;e.target.classList.toggle('on',showMask);sched()};
+$('#clr').onclick=()=>{if(!ph)return;push({t:'mask',ph,snap:ph.mk.slice()});ph.mk.fill(0);ph.painted=false;strip();sched()};
+$('#cpy').onclick=()=>{if(!ph)return;const s=ph;photos.forEach(p=>{if(p===s)return;if(!p.mk)p.mk=new Uint8Array(p.W*p.H);
+  if(p.W===s.W&&p.H===s.H)p.mk.set(s.mk);else for(let y=0;y<p.H;y++){const sy=(y*s.H/p.H)|0;for(let x=0;x<p.W;x++)p.mk[y*p.W+x]=s.mk[sy*s.W+((x*s.W/p.W)|0)]}
+  p.painted=s.painted});strip()};
+
+/* undo */
+async function doUndo(){const a=undoS.pop();if(!a)return;
+  if(a.t==='param'){P[a.k]=a.old;committed[a.k]=a.old;els[a.k][0].value=a.old;els[a.k][1].textContent=a.old;sched();return}
+  if(!photos.includes(a.ph))return doUndo();
+  if(a.ph!==ph)await select(photos.indexOf(a.ph));
+  ph.mk.set(a.snap);ph.painted=ph.mk.some(v=>v>0);strip()
+  sched()}
+$('#undoB').onclick=doUndo;
+addEventListener('keydown',e=>{if((e.metaKey||e.ctrlKey)&&!e.shiftKey&&e.key.toLowerCase()==='z'){e.preventDefault();doUndo()}});
+
+/* zoom */
+const fitW=()=>Math.min(wrap.clientWidth,wrap.clientHeight*W/H);
+function setZoom(z,mx,my,pmx,pmy){if(!base)return;z=Math.max(1,Math.min(8,z));
+  if(mx===undefined){mx=wrap.clientWidth/2;my=wrap.clientHeight/2}if(pmx===undefined){pmx=mx;pmy=my}
+  const fx=(wrap.scrollLeft+pmx-stage.offsetLeft)/stage.offsetWidth,fy=(wrap.scrollTop+pmy-stage.offsetTop)/stage.offsetHeight;
+  zoom=z;stage.style.width=fitW()*z+'px';
+  wrap.scrollLeft=fx*stage.offsetWidth+stage.offsetLeft-mx;wrap.scrollTop=fy*stage.offsetHeight+stage.offsetTop-my;
+  $('#zl').textContent=Math.round(z*100)+'%'}
+$('#zi').onclick=()=>setZoom(zoom*1.5);$('#zo').onclick=()=>setZoom(zoom/1.5);$('#zf').onclick=()=>setZoom(1);
+addEventListener('resize',()=>setZoom(zoom));
+document.addEventListener('wheel',e=>{if(!(e.ctrlKey||e.metaKey))return;e.preventDefault();
+  if(base&&wrap.contains(e.target)){const r=wrap.getBoundingClientRect();setZoom(zoom*Math.exp(-e.deltaY*0.01),e.clientX-r.left,e.clientY-r.top)}},{passive:false});
+let gz=1;['gesturestart','gesturechange','gestureend'].forEach(t=>document.addEventListener(t,e=>{e.preventDefault();
+  if(!base||!wrap.contains(e.target))return;if(t==='gesturestart')gz=zoom;else if(t==='gesturechange')setZoom(gz*e.scale)}));
+let mp=[];wrap.addEventListener('pointermove',e=>{const r=wrap.getBoundingClientRect();mp=[e.clientX-r.left,e.clientY-r.top]});wrap.addEventListener('pointerleave',()=>mp=[]);
+addEventListener('keydown',e=>{if(e.metaKey||e.ctrlKey||e.altKey||!base)return;
+  if(e.code==='KeyE'){e.preventDefault();e.shiftKey?setZoom(1):setZoom(zoom*1.25,...mp)}
+  else if(e.code==='KeyW'&&!e.shiftKey){e.preventDefault();setZoom(zoom/1.25,...mp)}});
+
+/* photos */
+const rd=f=>new Promise(r=>{const fr=new FileReader();fr.onload=()=>r(fr.result);fr.readAsDataURL(f)});
+const ld=s=>new Promise(r=>{const i=new Image();i.onload=()=>r(i);i.src=s});
+$('#file').onchange=async e=>{const fs=[...e.target.files];e.target.value='';const first=photos.length;
+  for(const f of fs){const im=await ld(await rd(f)),s=Math.min(1,MAX/Math.max(im.width,im.height)),t=96/Math.max(im.width,im.height),
+    c=document.createElement('canvas');c.width=Math.max(1,Math.round(im.width*t));c.height=Math.max(1,Math.round(im.height*t));c.getContext('2d').drawImage(im,0,0,c.width,c.height);
+    photos.push({file:f,name:f.name,W:Math.round(im.width*s),H:Math.round(im.height*s),thumb:c.toDataURL('image/jpeg',.7),mk:null,painted:false})}
+  strip();if(fs.length&&(first===0||!ph))select(first)};
+async function load(p){base=null;ph=p;const im=await ld(await rd(p.file));W=p.W;H=p.H;
+  const c=document.createElement('canvas');c.width=W;c.height=H;const x=c.getContext('2d');x.drawImage(im,0,0,W,H);
+  orig=x.getImageData(0,0,W,H);base=new ImageData(new Uint8ClampedArray(orig.data),W,H);out=new ImageData(W,H);
+  if(!p.mk)p.mk=new Uint8Array(W*H);mask=p.mk;cv.width=W;cv.height=H;rebuild()}
+async function select(i){const t=++tok;cv.style.opacity=.4;await load(photos[i]);if(t!==tok)return;cv.style.opacity=1;
+  $('#empty').style.display='none';wrap.classList.add('loaded');stage.style.display='block';$('#zc').style.display='flex';
+  zoom=1;stage.style.width=fitW()+'px';$('#zl').textContent='100%';strip();render()}
+function removePh(p){const i=photos.indexOf(p);photos.splice(i,1);undoS=undoS.filter(a=>!a.ph||a.ph!==p);
+  if(p===ph){if(photos.length)select(Math.min(i,photos.length-1));else{ph=null;base=null;stage.style.display='none';$('#zc').style.display='none';$('#empty').style.display='flex';wrap.classList.remove('loaded')}}strip()}
+function strip(){const s=$('#strip');s.innerHTML='';
+  photos.forEach(p=>{const d=document.createElement('div');d.className='th'+(p===ph?' on':'')+(p.painted?'':' nop');
+    d.innerHTML=`<img src="${p.thumb}" alt=""><span class="x">×</span>`;
+    d.onclick=e=>{if(e.target.className==='x')removePh(p);else if(p!==ph)select(photos.indexOf(p))};s.appendChild(d)});
+  $('#save').textContent='💾 '+(photos.length>1?`全${photos.length}枚を`:'')+'書き出す'}
+
+/* blur */
+function b1(s,d,w,h,r,hor){const n=hor?w:h,m=hor?h:w,st=hor?4:4*w,ln=hor?4*w:4,k=2*r+1;
+  for(let j=0;j<m;j++){const o=j*ln;for(let c=0;c<3;c++){let sum=0;
+    for(let i=-r;i<=r;i++)sum+=s[o+c+Math.min(n-1,Math.max(0,i))*st];
+    for(let i=0;i<n;i++){d[o+c+i*st]=sum/k;sum+=s[o+c+Math.min(n-1,i+r+1)*st]-s[o+c+Math.max(0,i-r)*st]}}}}
+function blur(src,w,h,r){const a=new Uint8ClampedArray(src),b=new Uint8ClampedArray(src);
+  for(let i=0;i<2;i++){b1(a,b,w,h,r,1);b1(b,a,w,h,r,0)}return a}
+function rebuild(){low=blur(base.data,W,H,Math.max(2,Math.round(W*0.0035)))}
+
+/* render */
+function sched(){if(!raf)raf=requestAnimationFrame(render)}
+const f1=(v,l,w,TT)=>{const d=v-l;return l+d*(1-w/(1+d*d/TT))};
+function render(){raf=0;if(!base||holding)return;
+  const b=base.data,l=low,o=out.data,n=W*H,s=P.smooth/100*0.92,TT=484,ov=showMask&&tab==='skin',
+    ex=Math.pow(2,P.exp/100*1.5),ct=1+P.con/100*0.7,sh=P.sh/100*0.4;
+  for(let i=0,k=0;i<n;i++,k+=4){
+    const mk=mask[i]/255,w=s*mk;let r=b[k],g=b[k+1],bl=b[k+2];
+    if(w>0){r=f1(r,l[k],w,TT);g=f1(g,l[k+1],w,TT);bl=f1(bl,l[k+2],w,TT)}
+    r=r/255*ex;g=g/255*ex;bl=bl/255*ex;
+    let lum=.299*r+.587*g+.114*bl;lum=lum>1?1:lum<0?0:lum;
+    const a=sh*(1-lum)*(1-lum)*(1-lum);
+    r=((r+a-.5)*ct+.5)*255;g=((g+a-.5)*ct+.5)*255;bl=((bl+a-.5)*ct+.5)*255;
+    if(ov&&mk>0){const q=mk*.4;r+=(255-r)*q;g+=(60-g)*q;bl+=(110-bl)*q}
+    o[k]=r;o[k+1]=g;o[k+2]=bl;o[k+3]=255}
+  ctx.putImageData(out,0,0)}
+
+/* compare */
+const cm=$('#cmp');
+const hold=v=>{if(!orig||!base)return;holding=v;if(v)ctx.putImageData(orig,0,0);else render()};
+cm.onpointerdown=e=>{e.preventDefault();hold(true)};
+['pointerup','pointerleave','pointercancel'].forEach(t=>cm.addEventListener(t,()=>hold(false)));
+cm.oncontextmenu=e=>e.preventDefault();
+
+/* heal & paint */
+function paintDot(cx,cy,r,er){const x0=Math.max(0,Math.floor(cx-r)),x1=Math.min(W-1,Math.ceil(cx+r)),y0=Math.max(0,Math.floor(cy-r)),y1=Math.min(H-1,Math.ceil(cy+r));
+  for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++){const t=Math.hypot(x-cx,y-cy)/r;if(t>=1)continue;
+    let a=t<.4?1:1-(t-.4)/.6;a=a*a*(3-2*a);const i=y*W+x,v=a*255;
+    if(!er){if(v>mask[i])mask[i]=v}else mask[i]*=(1-a)}}
+const dab=(x,y,r)=>paintDot(x,y,r,tool==='erase');
+
+/* pointer: draw / pan / pinch */
+function pt(e){const r=cv.getBoundingClientRect(),sc=W/r.width;return{x:(e.clientX-r.left)*sc,y:(e.clientY-r.top)*sc,cx:e.clientX-r.left,cy:e.clientY-r.top,sc}}
+const rad=p=>sizes[tool]*p.sc;
+function showCur(p){const R=sizes[tool];cur.style.cssText=`display:block;width:${R*2}px;height:${R*2}px;left:${p.cx}px;top:${p.cy}px`}
+const ptrs=new Map();let pinch=null,pan=null;
+function pinchState(){const[a,b]=[...ptrs.values()],r=wrap.getBoundingClientRect();
+  return{d:Math.hypot(a.x-b.x,a.y-b.y)||1,mx:(a.x+b.x)/2-r.left,my:(a.y+b.y)/2-r.top}}
+function endStroke(){if(!drawing)return;drawing=false;cur.style.display='none';
+  ph.painted=ph.painted||tool==='paint';strip();sched()}
+cv.onpointerdown=e=>{if(!base)return;e.preventDefault();cv.setPointerCapture(e.pointerId);ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  if(ptrs.size===2){endStroke();pan=null;const s=pinchState();pinch={d:s.d,z:zoom,mx:s.mx,my:s.my};return}
+  if(ptrs.size>2)return;
+  if(tool==='move'){pan={x:e.clientX,y:e.clientY};return}
+  push({t:'mask',ph,snap:mask.slice()});
+  drawing=true;const p=pt(e);last=p;showCur(p);dab(p.x,p.y,rad(p));sched()};
+cv.onpointermove=e=>{if(!base)return;const o=ptrs.get(e.pointerId);if(o){o.x=e.clientX;o.y=e.clientY}
+  if(pinch&&ptrs.size===2){const s=pinchState();setZoom(pinch.z*s.d/pinch.d,s.mx,s.my,pinch.mx,pinch.my);pinch.z=zoom;pinch.d=s.d;pinch.mx=s.mx;pinch.my=s.my;return}
+  if(pan&&o){const dx=e.clientX-pan.x,dy=e.clientY-pan.y;
+    if(wrap.scrollWidth<=wrap.clientWidth&&wrap.scrollHeight<=wrap.clientHeight)scrollBy(0,-dy);else{wrap.scrollLeft-=dx;wrap.scrollTop-=dy}
+    pan={x:e.clientX,y:e.clientY};return}
+  if(tool==='move')return;const p=pt(e);
+  if(drawing||e.pointerType==='mouse')showCur(p);
+  if(drawing){const r=rad(p),step=r*.6,dist=Math.hypot(p.x-last.x,p.y-last.y);
+    if(dist>=step){const n=Math.floor(dist/step);for(let i=1;i<=n;i++)dab(last.x+(p.x-last.x)*i/n,last.y+(p.y-last.y)*i/n,r);last=p;sched()}}};
+const up=e=>{ptrs.delete(e.pointerId);if(ptrs.size<2)pinch=null;if(ptrs.size===0){pan=null;endStroke()}};
+cv.onpointerup=up;cv.onpointercancel=up;cv.onpointerleave=()=>{if(!drawing)cur.style.display='none'};
+
+/* export */
+const crcT=(()=>{const t=new Uint32Array(256);for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;t[n]=c>>>0}return t})();
+const crc=u=>{let c=-1;for(let i=0;i<u.length;i++)c=crcT[(c^u[i])&255]^(c>>>8);return(c^-1)>>>0};
+async function zip(files){const parts=[],cen=[],enc=new TextEncoder();let off=0,cs2=0;
+  for(const f of files){const d=new Uint8Array(await f.blob.arrayBuffer()),n=enc.encode(f.name),c=crc(d);
+    const h=new DataView(new ArrayBuffer(30));h.setUint32(0,0x04034b50,true);h.setUint16(4,20,true);h.setUint16(6,0x800,true);h.setUint16(12,0x21,true);h.setUint32(14,c,true);h.setUint32(18,d.length,true);h.setUint32(22,d.length,true);h.setUint16(26,n.length,true);
+    parts.push(h.buffer,n,d);
+    const e=new DataView(new ArrayBuffer(46));e.setUint32(0,0x02014b50,true);e.setUint16(4,20,true);e.setUint16(6,20,true);e.setUint16(8,0x800,true);e.setUint16(14,0x21,true);e.setUint32(16,c,true);e.setUint32(20,d.length,true);e.setUint32(24,d.length,true);e.setUint16(28,n.length,true);e.setUint32(42,off,true);
+    cen.push(e.buffer,n);off+=30+n.length+d.length;cs2+=46+n.length}
+  const z=new DataView(new ArrayBuffer(22));z.setUint32(0,0x06054b50,true);z.setUint16(8,files.length,true);z.setUint16(10,files.length,true);z.setUint32(12,cs2,true);z.setUint32(16,off,true);
+  return new Blob([...parts,...cen,z.buffer],{type:'application/zip'})}
+async function saveFile(name,blob){let dl=null;try{dl=window.claude?await claude.use('downloads'):null}catch(e){}
+  try{if(dl)await dl.save({filename:name,data:blob});else{const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();a.remove()}
+    $('#xs').textContent=name+' を保存しました'}catch(e){$('#xs').textContent=e&&e.code==='declined'?'キャンセルしました':'保存できませんでした'}}
+let results=[];
+$('#save').onclick=async()=>{if(!photos.length||!base)return;const keep=photos.indexOf(ph),sm=showMask;showMask=false;holding=false;
+  $('#modal').style.display='flex';$('#xl').innerHTML='';$('#xz').style.display='none';results=[];
+  for(let i=0;i<photos.length;i++){$('#xs').textContent=`処理中… ${i+1} / ${photos.length}`;
+    if(photos[i]!==ph||i!==keep)await load(photos[i]);render();
+    const blob=await new Promise(r=>cv.toBlob(r,'image/jpeg',.95));let nm=photos[i].name.replace(/\.[^.]+$/,'')+'_re.jpg',k=2;
+    while(results.some(r=>r.name===nm))nm=photos[i].name.replace(/\.[^.]+$/,'')+`_re-${k++}.jpg`;results.push({name:nm,blob})}
+  showMask=sm;await select(keep);
+  const miss=photos.filter(p=>!p.painted).length;
+  $('#xs').textContent='完成しました。'+(miss&&P.smooth>0?`(肌の範囲が未指定の${miss}枚は、なめらか補正が入っていません)`:'');
+  results.forEach(r=>{const d=document.createElement('div');d.className='rr';d.innerHTML=`<span>${r.name}</span>`;
+    const b=document.createElement('button');b.textContent='保存';b.onclick=()=>saveFile(r.name,r.blob);d.appendChild(b);$('#xl').appendChild(d)});
+  if(results.length>1)$('#xz').style.display='block'};
+$('#xz').onclick=async()=>saveFile('retouch_re.zip',await zip(results));
+$('#mc').onclick=()=>{$('#modal').style.display='none'};
+</script>
+</body>
+</html>
